@@ -18,19 +18,24 @@ For the full details, you can either view the code or read our article which wil
 ### Example
 We used the spotify dataset from Kaggle.
 The first operation of our user was `SELECT * FROM Spotify WHERE popularity > 65;`
+
 The raw output (Snip) -
-![Filter output](tmp)
+
+![Filter output](Images/filter_result.jpg)
 
 The generated explanation -
-![Filter explanation](tmp)
+
+![Filter explanation](Images/filter_explanation.jpg)
 
 The second operation of the user was `SELECT AVG(dancability), AVG(loudness) FROM [SELECT * FROM Spotify WHERE year >= 1990] GROUPBY year;`
 
 The raw output (Snip) -
-![GroupBy output](tmp)
+
+![GroupBy output](Images/groupby_result.jpg)
 
 The generated explanation -
-![GroupBy explanation](tmp)
+
+![GroupBy explanation](Images/groupby_explanation.jpg)
 
 ### Usage
-For now, you can view usages examples at `Notebooks` folder and at `UserStudyUtils.py`.  We are currently working on a better API that will allow users to use pandas and generate explanations without effort and without using additional dedicated API. You can get sense of how it will work at the `Interactive` notebooks.
+For now, you can view usages examples at `Notebooks` folder and at `UserStudyInteractive.py`.  We are currently working on a better API that will allow users to use pandas and generate explanations without effort and without using additional dedicated API. You can get sense of how it will work at the `Interactive` notebooks.
