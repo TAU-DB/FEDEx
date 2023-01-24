@@ -1,9 +1,11 @@
-import pandas as pd
-from Operations import Operation
 import operator
-from DatasetRelation import DatasetRelation
-import utils
+import pandas as pd
 
+from fedex_generator.commons.consts import TOP_K_DEFAULT, DEFAULT_FIGS_IN_ROW
+from fedex_generator.commons import utils
+from fedex_generator.commons.DatasetRelation import DatasetRelation
+from fedex_generator.Operations import Operation
+from fedex_generator.Measures.ExceptionalityMeasure import ExceptionalityMeasure
 
 operators = {
     "==": operator.eq,
@@ -24,16 +26,19 @@ class Filter(Operation.Operation):
     def __init__(self, source_df, source_scheme, attribute=None, operation_str=None, value=None, result_df=None):
         super().__init__(source_scheme)
         self.source_df = source_df.reset_index()
+        self.attribute = attribute
+        self.source_scheme = source_scheme
+
         if result_df is None:
-            self.source_scheme, self.attribute, self.operation_str, self.value = \
-                source_scheme, attribute, operation_str, value
+            self.operation_str = operation_str
+            self.value = value
             self.result_df = self.source_df[do_operation(self.source_df[attribute], value, operation_str)]
         else:
             self.result_df = result_df
         self.source_name = utils.get_calling_params_name(source_df)
 
     def get_correlated_attributes(self):
-        numeric_df = self.source_df.head(10000)     # for performance we take part of the DB
+        numeric_df = self.source_df.head(10000)  # for performance we take part of the DB
         for column in numeric_df:
             try:
                 if utils.is_numeric(numeric_df[column]):
@@ -76,3 +81,29 @@ class Filter(Operation.Operation):
 
         return binned_col[binned_col.isin(filter_values)]
 
+    def explain(self, schema=None, attributes=None, top_k=TOP_K_DEFAULT,
+                figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None):
+        """
+        Explain for filter operation
+
+        :param schema: dictionary with new columns names, in case {'col_name': 'i'} will be ignored in the explanation
+        :param attributes: only this attributes will be included in the explanation calculation
+        :param top_k: top k explanations number, default one explanation only.
+        :param show_scores: show scores on explanation
+        :param figs_in_row: number of explanations figs in one row
+        :param title: explanation title
+
+        :return: explain figures
+        """
+
+        if attributes is None:
+            attributes = []
+
+        if schema is None:
+            schema = {}
+
+        measure = ExceptionalityMeasure()
+        scores = measure.calc_measure(self, schema, attributes)
+        figures = measure.calc_influence(utils.max_key(scores), top_k=top_k, figs_in_row=figs_in_row,
+                                         show_scores=show_scores, title=title)
+        return figures

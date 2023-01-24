@@ -1,15 +1,18 @@
+import math
+
 import numpy as np
-import matplotlib.pyplot as plt
-import utils
-from Measures.BaseMeasure import BaseMeasure
-from Measures.Bins import Bin
+
+from fedex_generator.commons import utils
+from fedex_generator.Measures.BaseMeasure import BaseMeasure, START_BOLD, END_BOLD
+from fedex_generator.Measures.Bins import Bin
 
 
 class ExceptionalityMeasure(BaseMeasure):
     def __init__(self):
         super().__init__()
 
-    def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title=None):
+    def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title=None, ax=None, score=None,
+                 show_scores: bool = False):
         res_col = bin_item.get_binned_result_column()
         src_col = bin_item.get_binned_source_column()
 
@@ -23,14 +26,15 @@ class ExceptionalityMeasure(BaseMeasure):
 
         labels = sorted(labels)
         probabilities = [100. * src_probs.get(item, 0) for item in labels]
-        probabilities2 = [100. * res_probs.get(item, 0) for item in labels]
+        probabilities2 = [100 * res_probs.get(item, 0) for item in labels]
 
         width = 0.35
         ind = np.arange(len(labels))
 
-        fig, ax = plt.subplots()
         result_bar = ax.bar(ind + width, probabilities2, width, label="After")
+
         ax.bar(ind, probabilities, width, label="Before")
+        ax.legend(loc='best')
         if influence_vals:
             max_label, _ = self.get_max_k(influence_vals, 1)
             max_label = max_label[0]
@@ -40,17 +44,19 @@ class ExceptionalityMeasure(BaseMeasure):
         label_tags = tuple([utils.to_valid_latex(bin_item.get_bin_representation(i)) for i in labels])
         tags_max_length = max([len(tag) for tag in label_tags])
         ax.set_xticklabels(label_tags, rotation='vertical' if tags_max_length >= 4 else 'horizontal')
-        plt.legend(loc='best')
-        plt.xlabel(utils.to_valid_latex(bin_item.get_bin_name() + " values"), fontsize=16)
-        plt.ylabel("frequency(\\%)", fontsize=16)
+
+        ax.set_xlabel(utils.to_valid_latex(bin_item.get_bin_name() + " values"), fontsize=20)
+        ax.set_ylabel("frequency(\\%)", fontsize=16)
 
         if title is not None:
-            ax.set_title(utils.to_valid_latex(title), loc='center', wrap=True)
+            if show_scores:
+                ax.set_title(f'score: {score}\n {utils.to_valid_latex(title)}', fontdict={'fontsize': 14})
+            else:
+                ax.set_title(utils.to_valid_latex(title), fontdict={'fontsize': 14})
 
-        fig = plt.gcf()
-        return fig
+        ax.set_axis_on()
 
-    def interestingness_only_explanation(self,  source_col, result_col, col_name):
+    def interestingness_only_explanation(self, source_col, result_col, col_name):
         if utils.is_categorical(source_col):
             vc = source_col.value_counts()
             source_max = utils.max_key(vc)
@@ -69,7 +75,8 @@ class ExceptionalityMeasure(BaseMeasure):
                f"deviation was {std_source:.2f}, and now the mean is {mean:.2f} and the standard deviation is {std:.2f}."
 
     def calc_measure_internal(self, bin: Bin):
-        return ExceptionalityMeasure.kstest(bin.source_column.dropna(), bin.result_column.dropna()) #/ len(source_col.dropna().value_counts())
+        return ExceptionalityMeasure.kstest(bin.source_column.dropna(),
+                                            bin.result_column.dropna())  # / len(source_col.dropna().value_counts())
 
     @staticmethod
     def kstest(s, r):
@@ -94,6 +101,16 @@ class ExceptionalityMeasure(BaseMeasure):
 
         return influence
 
+    def build_operation_expression(self, source_name):
+        from fedex_generator.Operations.Filter import Filter
+        from fedex_generator.Operations.Join import Join
+
+        if isinstance(self.operation_object, Filter):
+            return f'Dataframe {self.operation_object.source_name}, ' \
+                   f'filtered on attribute {self.operation_object.attribute}'
+        elif isinstance(self.operation_object, Join):
+            return f'{self.operation_object.right_name} joined with {self.operation_object.left_name} by {self.operation_object.attribute}'
+
     def build_explanation(self, current_bin: Bin, col_name, max_value, source_name):
         source_col = current_bin.get_binned_source_column()
         res_col = current_bin.get_binned_result_column()
@@ -111,36 +128,48 @@ class ExceptionalityMeasure(BaseMeasure):
 
             values_range_str = "below {}".format(utils.format_bin_item(values[1])) if max_value == 0 else \
                 "above {}".format(utils.format_bin_item(max_value)) if index == len(values) - 1 else \
-                "between {} and {}".format(utils.format_bin_item(values[index]), utils.format_bin_item(values[index + 1]))
+                    "between {} and {}".format(utils.format_bin_item(values[index]),
+                                               utils.format_bin_item(values[index + 1]))
             factor = res_probs.get(max_value, 0) / source_probs[max_value]
             if factor < 1:
-                factor = 1 / factor
+                factor = math.inf if factor == 0 else 1 / factor
                 proportion = "less"
             else:
                 proportion = "more"
-            additional_explanation.append(f"See that the column \\textbf{{\"{col_name}\"}} presents a significant change in distribution.\n"
-                                          f"In particular, values \\textbf{{{values_range_str}}} (in green) appears {utils.smart_round(factor)} times {proportion} "
-                                          f"than before (was {100 * source_probs[max_value]:.1f}\\% now {100 * res_probs.get(max_value, 0):.1f}\\%)")
+
+            appear_test = f'{utils.smart_round(factor)} times {proportion}'
+            additional_explanation.append(
+                f"{START_BOLD}{utils.to_valid_latex(col_name, True)}{END_BOLD} values "
+                f"{START_BOLD}{utils.to_valid_latex(values_range_str, True)}{END_BOLD} (in green)\n"
+                f"appear {START_BOLD}"
+                f"{utils.to_valid_latex(appear_test, True)}"
+                f"{END_BOLD} than before")
         else:
             factor = res_probs.get(max_value, 0) / source_probs[max_value]
-            if factor < 1:
-                proportion = "less"
-                factor = 1 / factor
-            else:
-                proportion = "more"
 
             source_prob = 100 * source_probs[max_value]
             res_prob = 100 * res_probs.get(max_value, 0)
             max_value_rep = current_bin.get_bin_representation(max_value)
-            additional_explanation.append(f"See that the column \\textbf{{\"{col_name}\"}} presents a significant change in distribution.\n"
-                                          f"In particular, \\textbf{{\"{utils.to_valid_latex(max_value_rep)}\"}} (in green)"
-                                          f" appears {utils.smart_round(factor)} times {proportion} "
-                                          f"than before (was {source_prob:.1f}\\% now {res_prob:.1f}\\%)")
+
+            if factor == 0:
+                proportion_sentes = f' frequency was {source_prob:.1f}% now {res_prob:.1f}%'
+            elif factor < 1:
+                proportion = "less"
+                factor = 1 / factor
+                proportion_sentes = f"appear {START_BOLD} " \
+                                    f"{utils.to_valid_latex(f'{utils.smart_round(factor)} times {proportion}', True)}" \
+                                    f" {END_BOLD} than before"
+            else:
+                proportion = "more"
+                proportion_sentes = f"appear {START_BOLD} " \
+                                    f"{utils.to_valid_latex(f'{utils.smart_round(factor)} times {proportion}', True)}" \
+                                    f" {END_BOLD} than before"
+
+            additional_explanation.append(
+                f"{START_BOLD}{utils.to_valid_latex(col_name, True)}{END_BOLD} value "
+                f"{START_BOLD}{utils.to_valid_latex(max_value_rep, True)}"
+                f"{END_BOLD} (in green){proportion_sentes}")
 
         influence_top_example = ", ".join(additional_explanation)
 
-        return "\\textbf{Explanation:} " + influence_top_example
-
-
-
-
+        return influence_top_example

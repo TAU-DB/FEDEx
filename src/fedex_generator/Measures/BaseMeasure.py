@@ -1,15 +1,25 @@
-import pandas as pd
-import numpy as np
-from utils import is_numeric, to_valid_latex
-from Measures.Bins import Bins, Bin, NumericBin
-from paretoset import paretoset
+import math
+
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import rc
-import matplotlib
+import numpy as np
+import pandas as pd
+from paretoset import paretoset
+
+from fedex_generator.Measures.Bins import Bins, Bin
+from fedex_generator.commons.consts import SIGNIFICANCE_THRESHOLD, TOP_K_DEFAULT, DEFAULT_FIGS_IN_ROW
+from fedex_generator.commons.utils import is_numeric, to_valid_latex
+
+
+
 usetex = matplotlib.checkdep_usetex(True)
 print(f"usetex-{usetex}")
 rc('text', usetex=usetex)
 matplotlib.rcParams.update({'font.size': 16})
+
+START_BOLD = r'$\bf{'
+END_BOLD = '}$'
 
 
 def draw_pie(items_dict: dict, important_item=None):
@@ -30,14 +40,16 @@ def draw_histogram(items_before: list, items_after: list, label: str, title):
     all_vals = list(set(list(items_before) + list(items_after)))
     if not is_numeric(all_vals):
         if len(items_before) > 0:
-            plt.hist([sorted(list(items_before)), sorted(list(items_after))], label=["Before", "After"], color=[u'#ff7f0e', u'#1f77b4'])
+            plt.hist([sorted(list(items_before)), sorted(list(items_after))], label=["Before", "After"],
+                     color=[u'#ff7f0e', u'#1f77b4'])
         else:
             plt.hist([sorted(list(items_after))], label=["After"])
 
     else:
         bins = np.linspace(np.min(all_vals), np.max(all_vals), min(40, len(all_vals)))
         if len(items_before) > 0:
-            plt.hist([list(items_before), list(items_after)], bins=bins, label=["Before", "After"], color=[u'#ff7f0e', u'#1f77b4'])
+            plt.hist([list(items_before), list(items_after)], bins=bins, label=["Before", "After"],
+                     color=[u'#ff7f0e', u'#1f77b4'])
         else:
             plt.hist([list(items_after)], bins=bins, label=["After"])
 
@@ -67,7 +79,7 @@ class BaseMeasure(object):
 
         return source_col, res_col
 
-    def calc_measure(self, operation_object, scheme):
+    def calc_measure(self, operation_object, scheme, use_only_columns):
         self.operation_object = operation_object
         self.score_dict = {}
         self.max_val = -1
@@ -76,6 +88,9 @@ class BaseMeasure(object):
         for attr, dataset_relation in operation_object.iterate_attributes():
             column_scheme = scheme.get(attr, "ni").lower()
             if column_scheme == "i":
+                continue
+
+            if len(use_only_columns) > 0 and attr not in use_only_columns:
                 continue
 
             source_col, res_col = self.get_source_and_res_cols(dataset_relation, attr)
@@ -90,13 +105,23 @@ class BaseMeasure(object):
             for bin_ in bin_candidates.bins:
                 measure_score = max(self.calc_measure_internal(bin_), measure_score)
 
-            self.score_dict[attr] = (dataset_relation.get_source_name(), bin_candidates, measure_score, (source_col, res_col))
+            self.score_dict[attr] = (
+                dataset_relation.get_source_name(), bin_candidates, measure_score, (source_col, res_col))
 
         self.max_val = max([kl_val for _, _, kl_val, _ in self.score_dict.values()])
 
         return dict([(attribute, _tuple[2]) for (attribute, _tuple) in self.score_dict.items()])
 
     def calc_measure_internal(self, _bin: Bin):
+        raise NotImplementedError()
+
+    def build_operation_expression(self, source_name):
+        """
+        Get manipulation expression
+
+        :param source_name: The source df name
+        :return: string of the manipulation
+        """
         raise NotImplementedError()
 
     def build_explanation(self, current_bin: Bin, max_col_name, max_value, source_name):
@@ -125,7 +150,8 @@ class BaseMeasure(object):
         max_influences = influence_vals_max_indexes[-k:][::-1]
         return max_indices, max_influences
 
-    def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title=None):
+    def draw_bar(self, bin_item: Bin, influence_vals: dict = None, title=None, ax=None, score=None,
+                 show_scores: bool = False):
         raise NotImplementedError()
 
     @staticmethod
@@ -137,16 +163,17 @@ class BaseMeasure(object):
 
         return (influence - influence_mean) / np.sqrt(influence_var)
 
-    def calc_influence(self, brute_force=False):
+    def calc_influence(self, brute_force=False, top_k=TOP_K_DEFAULT,
+                       figs_in_row: int = DEFAULT_FIGS_IN_ROW, show_scores: bool = False, title: str = None):
         score_and_col = [(self.score_dict[col][2], col, self.score_dict[col][1], self.score_dict[col][3])
                          for col in self.score_dict]
         list_scores_sorted = score_and_col
         list_scores_sorted.sort()
-        K = 3
-        results_columns = ["score", "significance", "influence", "explanation", "bin", "influence_vals", "bin_name", "column_name"]
+        K = top_k
+        results_columns = ["score", "significance", "influence", "explanation", "bin", "influence_vals"]
         results = pd.DataFrame([], columns=results_columns)
         figures = []
-        for score, max_col_name, bins, _ in list_scores_sorted[:-K-1:-1]:
+        for score, max_col_name, bins, _ in list_scores_sorted[:-K - 1:-1]:
             source_name, bins, score, _ = self.score_dict[max_col_name]
             for current_bin in bins.bins:
                 influence_vals = self.get_influence_col(max_col_name, current_bin, brute_force)
@@ -159,21 +186,47 @@ class BaseMeasure(object):
 
                 for max_value, influence_val in zip(max_values, max_influences):
                     significance = self.get_significance(influence_val, influence_vals_list)
+                    if significance < SIGNIFICANCE_THRESHOLD:
+                        continue
                     explanation = self.build_explanation(current_bin, max_col_name, max_value, source_name)
 
-                    new_result = dict(zip(results_columns, [score, significance, influence_val, explanation, current_bin, influence_vals, current_bin.get_bin_name(), max_col_name]))
-                    results = results.append([new_result], ignore_index=True)
+                    new_result = dict(zip(results_columns,
+                                          [score, significance, influence_val, explanation, current_bin, influence_vals,
+                                           current_bin.get_bin_name(), max_col_name]))
+                    results = pd.concat([results, pd.DataFrame([new_result])], ignore_index=True)
 
         results_skyline = results[results_columns[0:2]].astype("float")
-        skyline = paretoset(results_skyline, ["max", "max"])
+        skyline = paretoset(results_skyline, ["diff", "max"])
         explanations = results[skyline]["explanation"]
         bins = results[skyline]["bin"]
         influence_vals = results[skyline]["influence_vals"]
-        for explanation, current_bin, current_influence_vals in zip(explanations, bins, influence_vals):
-            fig = self.draw_bar(current_bin, current_influence_vals, title=explanation)
-            figures.append(fig)
+        scores = results[skyline]["score"]
 
-        return figures
+        if len(scores) == 0:
+            print(f'{source_name} dataset there is not interesting explanation')
+            return
+
+        if top_k > 1:
+            rows = math.ceil(len(scores) / figs_in_row)
+            fig, axes = plt.subplots(rows, figs_in_row, figsize=(7 * figs_in_row, 8 * rows))
+            for ax in axes.reshape(-1):
+                ax.set_axis_off()
+        else:
+            fig, axes = plt.subplots(figsize=(7, 7))
+
+        title = title if title else self.build_operation_expression(source_name)
+        fig.suptitle(title, fontsize=20)
+
+        for index, (explanation, current_bin, current_influence_vals, score) in enumerate(
+                zip(explanations, bins, influence_vals, scores)):
+
+            fig = self.draw_bar(current_bin, current_influence_vals, title=explanation,
+                                ax=axes.reshape(-1)[index] if top_k > 1 else axes, score=score, show_scores=show_scores)
+            if fig:
+                figures.append(fig)
+
+        plt.tight_layout()
+        return figures if len(figures) > 0 else fig
 
     def calc_interestingness_only(self):
         score_and_col = [(self.score_dict[col][2], col, self.score_dict[col][1], self.score_dict[col][3])

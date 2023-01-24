@@ -1,5 +1,5 @@
-import utils
 import pandas as pd
+from fedex_generator.commons import utils
 
 
 class Bin(object):
@@ -90,13 +90,12 @@ class NumericBin(Bin):
             binned_source_column, bins = pd.qcut(source_column, size, retbins=True, labels=False, duplicates='drop')
             bins = utils.drop_nan(bins)
             if len(bins) > 0:
-                bins[0] -= 1     # stupid hack because pandas cut uses (,] boundaries, and the first bin is [,]
+                bins[0] -= 1  # stupid hack because pandas cut uses (,] boundaries, and the first bin is [,]
             binned_result_column = pd.cut(result_column, bins=bins, labels=False, duplicates='drop')
         else:
             binned_source_column = None
-            binned_result_column, bins = pd.qcut(result_column, size, retbins=True, labels=False, duplicates='drop')    # .reset_index(drop=True)
-            if len(bins) > 0:
-                bins[0] -= 1     # stupid hack because pandas cut uses (,] boundaries, and the first bin is [,]
+            binned_result_column, bins = pd.qcut(result_column, size, retbins=True, labels=False,
+                                                 duplicates='drop')  # .reset_index(drop=True)
 
         super().__init__(binned_source_column, binned_result_column, "NumericBin")
         self.bins = bins
@@ -174,7 +173,12 @@ class Bins(object):
         if source_column is None:
             # GroupBy
             self.bins += self.get_multi_index_bins(source_column, result_column, bins_count)
+            if len(self.bins) > 0:
+                return
+
+        if source_column is not None and len(source_column) == 0 and len(result_column) == 0:
             return
+
         if utils.is_numeric(result_column):
             self.bins += self.bin_numeric(source_column, result_column, bins_count)
         else:
