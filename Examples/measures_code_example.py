@@ -1,14 +1,14 @@
-from Operations import Filter
-from Operations import Join
-from Operations import GroupBy
-from Measures.ExceptionalityMeasure import ExceptionalityMeasure
-from Measures.NormalizedDiversityMeasure import NormalizedDiversityMeasure
 import pandas as pd
-from utils import max_key
 import warnings
-warnings.filterwarnings("ignore")
-import utils
 
+warnings.filterwarnings("ignore")
+
+from fedex_generator.Operations import Filter
+from fedex_generator.Operations import Join
+from fedex_generator.Operations import GroupBy
+from fedex_generator.Measures.ExceptionalityMeasure import ExceptionalityMeasure
+from fedex_generator.Measures.NormalizedDiversityMeasure import NormalizedDiversityMeasure
+from fedex_generator.commons.utils import max_key, get_calling_params_name
 
 SAMPLE = 0
 
@@ -17,8 +17,8 @@ def join(dbl, dbl_name, dbr, dbr_name, attr, ignore={}):
     print(f"SELECT * FROM {dbl_name} INNER JOIN {dbr_name} ON {dbl_name}.{attr}={dbr_name}.{attr};")
 
     if SAMPLE and max(len(dbl), len(dbr)) > SAMPLE:
-        dbl_name = utils.get_calling_params_name(dbl)
-        dbr_name = utils.get_calling_params_name(dbr)
+        dbl_name = get_calling_params_name(dbl)
+        dbr_name = get_calling_params_name(dbr)
         sampled_dbl = dbl.sample(n=SAMPLE) if SAMPLE < len(dbl) else dbl
         sampled_dbr = dbr.sample(n=SAMPLE) if SAMPLE < len(dbr) else dbr
         j_sampled = Join.Join(sampled_dbl, sampled_dbr, ignore, attr, left_name=dbl_name, right_name=dbr_name)
@@ -26,7 +26,7 @@ def join(dbl, dbl_name, dbr, dbr_name, attr, ignore={}):
         measure = ExceptionalityMeasure()
         scores = measure.calc_measure(j_sampled, {})
         top_1 = sorted(scores, key=scores.get, reverse=True)[0]
-        ignore = { col:"i" for col in scores if col != top_1 }
+        ignore = {col: "i" for col in scores if col != top_1}
     j = Join.Join(dbl, dbr, ignore, attr)
     print(j.result_df)
     measure = ExceptionalityMeasure()
@@ -36,14 +36,14 @@ def join(dbl, dbl_name, dbr, dbr_name, attr, ignore={}):
     return j.result_df
 
 
-def filter_(db,db_name, attr, op, val, ignore={}):
+def filter_(db, db_name, attr, op, val, ignore={}):
     print(f"SELECT * FROM {db_name} WHERE {attr} {op} {val};")
     if SAMPLE and len(db) > SAMPLE:
         f_sampled = Filter.Filter(db.sample(n=SAMPLE), ignore, attr, op, val)
         measure = ExceptionalityMeasure()
         scores = measure.calc_measure(f_sampled, {})
         top_1 = sorted(scores, key=scores.get, reverse=True)[0]
-        ignore = { col:"i" for col in scores if col != top_1 }
+        ignore = {col: "i" for col in scores if col != top_1}
 
     f = Filter.Filter(db, ignore, attr, op, val)
     print(f.result_df)
@@ -51,8 +51,9 @@ def filter_(db,db_name, attr, op, val, ignore={}):
     scores = measure.calc_measure(f, ignore)
     results = measure.calc_influence(max_key(scores))
 
-def group_by(db,db_name, attrs, agg_dict, ignore={}):
-    items = ", ".join([f"{func}({attr})" for (attr,funcs) in agg_dict.items() for func in funcs])
+
+def group_by(db, db_name, attrs, agg_dict, ignore={}):
+    items = ", ".join([f"{func}({attr})" for (attr, funcs) in agg_dict.items() for func in funcs])
     attr_str = ", ".join(attrs)
     print(f"SELECT {items} FROM {db_name} GROUP BY {attr_str};")
     g = GroupBy.GroupBy(db, ignore, attrs, agg_dict)

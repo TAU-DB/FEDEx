@@ -1,17 +1,17 @@
 import inspect
-import numpy as np
 import random
 import pandas as pd
 import scipy
 import statistics
 import operator
-from kstest import ks_2samp
 from enum import Enum
+from fedex_generator.commons.kstest import *
 
 
-def to_valid_latex(string):
-    latex_string = str(string)   # unicode_to_latex(string)
-    return latex_string.replace("&", "\\&").replace("_", " ").replace("#", "\\#")
+def to_valid_latex(string, is_bold: bool = False):
+    latex_string = str(string)  # unicode_to_latex(string)
+    space = r'\ ' if is_bold else ' '
+    return latex_string.replace("&", "\\&").replace("#", "\\#").replace(' ', space).replace("_", space)
 
 
 def smart_round(number):
@@ -51,9 +51,9 @@ def translate(df, d=None):
     out = []
     for i in np_array:
         if i not in d:
-            r = random.randint(1, len(df)*1000)
+            r = random.randint(1, len(df) * 1000)
             while r in d:
-                r = random.randint(1, len(df)*1000)
+                r = random.randint(1, len(df) * 1000)
             d[i] = r
         out.append(d[i])
 
