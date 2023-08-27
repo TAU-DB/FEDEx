@@ -3,6 +3,15 @@
 ### Introduction
 FEDEx is a system that assists in the process of EDA (Exploratory Data Analysis) sessions - you can use FEDEx API instead of pandas and execute various operations (currently supports Filter, Group By and Join) on your data on real-time and it will generate NL explanations + Visualizations to your queries results. The explanations are coherent and costumized specifically to your query - It explains what is actually interesting in the query itself or it's result dataframe. 
 
+### The PD-EXPLAIN Python library
+FEDEx is now a part of PD-EXPLAIN! an easy-to-use Python wrapper for Pandas. 
+Install by:
+```bash
+  pip install pd-explain
+```
+For more information, visit the [PD-EXPLAIN](https://github.com/analysis-bots/pd-explain) Github page
+
+
 ### How it works
 FEDEx is built of multiple parts, the high level process is:
 
