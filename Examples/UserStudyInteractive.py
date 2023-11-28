@@ -11,7 +11,7 @@ from Operations import GroupBy
 from Measures.ExceptionalityMeasure import ExceptionalityMeasure
 from Measures.NormalizedDiversityMeasure import NormalizedDiversityMeasure
 from enum import Enum
-import utils
+from src.fedex_generator.commons import utils
 from IPython.display import display, HTML
 
 

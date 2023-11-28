@@ -1,7 +1,7 @@
 
-# Fedex
+# Fedex Genarator
 ### Introduction
-FEDEx is a system that assists in the process of EDA (Exploratory Data Analysis) sessions - you can use FEDEx API instead of pandas and execute various operations (currently supports Filter, Group By and Join) on your data on real-time and it will generate NL explanations + Visualizations to your queries results. The explanations are coherent and costumized specifically to your query - It explains what is actually interesting in the query itself or it's result dataframe. 
+FEDEx Genarator is a system that assists in the process of EDA (Exploratory Data Analysis) sessions. Based on FEDEx work (https://github.com/TAU-DB/FEDEx), it gives the user the option to generate NL explanations + Visualizations to their queries (Filter/GroupBy/Join) results.
 
 ### The PD-EXPLAIN Python library
 FEDEx is now a part of PD-EXPLAIN! an easy-to-use Python wrapper for Pandas. 
@@ -13,19 +13,18 @@ For more information, visit the [PD-EXPLAIN](https://github.com/analysis-bots/pd
 
 
 ### How it works
-FEDEx is built of multiple parts, the high level process is:
+FEDEx generator is forked from on FEDEx system, and offer new process to get explanation:
 
-1. The user enters input dataframe and a query (Filter/GroupBy/Join) and it's parameters. 
-2. FEDEx executes the query
-3. Then FEDEx calculates an Interestingness Measure (that works well with the specific operation, for example Exceptionality measure for Filter and Join operations) for every column in the output dataframe (the query result)
+1. The user users query (filter/groupby/join), and pass to FEDEx the input dataframe, output dataframe and the query parameters.
+3. FEDEx calculates an Interestingness Measure (that works well with the specific operation, for example Exceptionality measure for Filter and Join operations) for every column in the output dataframe (the query result)
 4. FEDEx finds the most interesting columns and partition them to set of rows.
-5. Then It finds the set-of-rows that affects the Interesingness measure result the most (from [2]).
-6. Now FEDEx takes the top columns and set-of-rows and generates  meaningful explanations
+5. Then it finds the set-of-rows that affects the Interesingness measure result the most (from [2]).
+6. Now FEDEx takes the top columns and set-of-rows and generates meaningful explanations
 
-For the full details, you can either view the code or read our article which will be referenced here really soon:)
+For the full details, you can either view the code or read the FEDEx article which will be referenced here really soon:)
 
 ### Example
-We used the spotify dataset from Kaggle.
+In FEDEx example they used the spotify dataset from Kaggle.
 The first operation of our user was `SELECT * FROM Spotify WHERE popularity > 65;`
 
 The raw output (Snip) -
@@ -54,6 +53,4 @@ First, you have to install the requirements - `py -3 -m pip install -r requireme
 
 Secondly, you should install latex on your system (the explanations inside the graphs require that). Things will still work even without latex but the experince might be a bit inferior.
 
-For now, you can view usage examples at `Notebooks` folder and at `UserStudyInteractive.py`.  We are currently working on a better API that will allow users to use pandas and generate explanations without effort and without using additional dedicated API. You can get sense of how it will work at the `Interactive` notebooks. You should use the functions `join`, `filter_` and `group_by`. If you want to disable FEDEX-Sampling - you should set `SAMPLE` global variable at `UserStudyInteractive.py` to 0. 
-
-Notice that `UserStudyInteractive.py` was designed to be used inside a jupyter notebook, so you should use jupyter notebook or to make several minor changes.
+This fork created to work on some adjusments for a API that will allow users to use pandas and generate explanations without effort and without using additional dedicated API.
